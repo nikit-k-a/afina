@@ -27,33 +27,20 @@ public:
 
     ~SimpleLRU()
     {
+
         _lru_index.clear();
-//TODO!!!
         if(_lru_tail != nullptr)
         {
             printf("\n\n\nDestructor\n\n\n");
-
-            //from head?
             while(_lru_tail->prev != nullptr)
             {
-                // if (i > 20000) exit(3);
-                printf("\ntail = %p", _lru_tail);
-                printf("\ntail prev = %p", _lru_tail->prev.get());
-                // printf("\nhead = %p", _lru_head.get());
-                // printf("\nhead prev = %p", _lru_head->prev.get());
-                // printf("\nhead next = %p", _lru_head->next);
-
-
-                _lru_tail = _lru_tail->prev.get();
-                printf("\n\nFF");
-                printf("\n\ndeleting.. = %p", _lru_tail->next);
-                // if (i > 0) delete _lru_tail->next;
+                _lru_tail = _lru_tail->prev;
+                _lru_tail -> next.reset();
             }
-        // delete _lru_tail;
-        _lru_tail = nullptr;
-        _lru_head.reset();
+
+            _lru_tail = nullptr;
+            _lru_head.reset();
         }
-        printf("\n\nEnd_Destr\n\n");
     }
 
     // Implements Afina::Storage interface
@@ -84,8 +71,8 @@ private:
 
         const std::string key;
         std::string value;
-        std::unique_ptr<lru_node> prev;
-        lru_node *next;
+        std::unique_ptr<lru_node> next;
+        lru_node *prev;
     };
 
     // Maximum number of bytes could be stored in this cache.
@@ -105,7 +92,12 @@ private:
     lru_node* _lru_tail;
 
     // Index of nodes from list above, allows fast random access to elements by lru_node#key
-    std::map<std::reference_wrapper<const std::string>, std::reference_wrapper<lru_node>, std::less<std::string>> _lru_index;
+    //typedef to pass iterator to a function
+    typedef std::map<std::reference_wrapper<const std::string>, std::reference_wrapper<lru_node>, std::less<std::string>> Map_t;
+    Map_t _lru_index;
+
+    void _put(const std::string &key, const std::string &value, const Map_t::const_iterator &it);
+    void _delete(const std::string &key, const Map_t::const_iterator &it);
 };
 
 } // namespace Backend
