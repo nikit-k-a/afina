@@ -38,16 +38,14 @@ ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps, std::shared_ptr<Loggi
 ServerImpl::~ServerImpl() {}
 
 // See Server.h
-void ServerImpl::Start(uint16_t port, uint32_t n_accept, uint32_t n_workers)
-{
+void ServerImpl::Start(uint16_t port, uint32_t n_accept, uint32_t n_workers) {
     _logger = pLogging->select("network");
     _logger->info("Start mt_blocking network service");
 
     sigset_t sig_mask;
     sigemptyset(&sig_mask);
     sigaddset(&sig_mask, SIGPIPE);
-    if (pthread_sigmask(SIG_BLOCK, &sig_mask, NULL) != 0)
-    {
+    if (pthread_sigmask(SIG_BLOCK, &sig_mask, NULL) != 0) {
         throw std::runtime_error("Unable to mask SIGPIPE");
     }
 
@@ -58,26 +56,22 @@ void ServerImpl::Start(uint16_t port, uint32_t n_accept, uint32_t n_workers)
     server_addr.sin_addr.s_addr = INADDR_ANY; // Bind to any address
 
     _server_socket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (_server_socket == -1)
-    {
+    if (_server_socket == -1) {
         throw std::runtime_error("Failed to open socket");
     }
 
     int opts = 1;
-    if (setsockopt(_server_socket, SOL_SOCKET, SO_REUSEADDR, &opts, sizeof(opts)) == -1)
-    {
+    if (setsockopt(_server_socket, SOL_SOCKET, SO_REUSEADDR, &opts, sizeof(opts)) == -1) {
         close(_server_socket);
         throw std::runtime_error("Socket setsockopt() failed");
     }
 
-    if (bind(_server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
-    {
+    if (bind(_server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
         close(_server_socket);
         throw std::runtime_error("Socket bind() failed");
     }
 
-    if (listen(_server_socket, 5) == -1)
-    {
+    if (listen(_server_socket, 5) == -1) {
         close(_server_socket);
         throw std::runtime_error("Socket listen() failed");
     }
@@ -87,29 +81,31 @@ void ServerImpl::Start(uint16_t port, uint32_t n_accept, uint32_t n_workers)
 }
 
 // See Server.h
-void ServerImpl::Stop()
-{
+void ServerImpl::Stop() {
     running.store(false);
     shutdown(_server_socket, SHUT_RDWR);
-    for(auto& w_socket: _workers_sockets)
-    {
+    std::unique_lock<std::mutex> lock(_mut);
+    for(auto& w_socket: _workers_sockets) {
         //kill them all
         shutdown(w_socket, SHUT_RDWR);
     }
 }
 
 // See Server.h
-void ServerImpl::Join()
-{
-    // ??? nothing new here ???
+void ServerImpl::Join() {
+    {
+        std::unique_lock<std::mutex> lock(_mut);
+        while(!_workers_sockets.empty()) {
+            _workers_end.wait(lock);
+        }
+    }
     assert(_thread.joinable());
     _thread.join();
     close(_server_socket);
 }
 
 // See Server.h
-void ServerImpl::OnRun()
-{
+void ServerImpl::OnRun() {
     // Here is connection state
     // - parser: parse state of the stream
     // - command_to_execute: last command parsed out of stream
@@ -126,20 +122,17 @@ void ServerImpl::OnRun()
         int client_socket;
         struct sockaddr client_addr;
         socklen_t client_addr_len = sizeof(client_addr);
-        if ((client_socket = accept(_server_socket, (struct sockaddr *)&client_addr, &client_addr_len)) == -1)
-        {
+        if ((client_socket = accept(_server_socket, (struct sockaddr *)&client_addr, &client_addr_len)) == -1) {
             continue;
         }
 
         // Got new connection
-        if (_logger->should_log(spdlog::level::debug))
-        {
+        if (_logger->should_log(spdlog::level::debug)) {
             std::string host = "unknown", port = "-1";
 
             char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
             if (getnameinfo(&client_addr, client_addr_len, hbuf, sizeof(hbuf), sbuf, sizeof(sbuf),
-                            NI_NUMERICHOST | NI_NUMERICSERV) == 0)
-            {
+                            NI_NUMERICHOST | NI_NUMERICSERV) == 0) {
                 host = hbuf;
                 port = sbuf;
             }
@@ -156,14 +149,12 @@ void ServerImpl::OnRun()
 
         {
             std::unique_lock<std::mutex> lock(_mut);
-            if (_workers_sockets.size() < _max_workers)
-            {
+            if (_workers_sockets.size() < _max_workers) {
                 _workers_sockets.push_back(client_socket);
                 std::thread worker(&ServerImpl::client_handler, this, client_socket);
                 worker.detach();
             }
-            else
-            {
+            else {
                 //no more connections!!
                 close(client_socket);
                 //logger??warn?
@@ -175,14 +166,12 @@ void ServerImpl::OnRun()
     _logger->warn("Network stopped");
 }
 
-void ServerImpl::client_handler(int client_socket)
-{
+void ServerImpl::client_handler(int client_socket) {
     std::size_t arg_remains;
     Protocol::Parser parser;
     std::string argument_for_command;
     std::unique_ptr<Execute::Command> command_to_execute;
-    try
-    {
+    try {
         int readed_bytes = -1;
         char client_buffer[4096];
         while ((readed_bytes = read(client_socket, client_buffer, sizeof(client_buffer))) > 0) {
@@ -253,28 +242,27 @@ void ServerImpl::client_handler(int client_socket)
             } // while (readed_bytes)
         }
 
-        if (readed_bytes == 0)
-        {
+        if (readed_bytes == 0) {
             _logger->debug("Connection closed");
         }
 
-        else
-        {
+
+        else {
             throw std::runtime_error(std::string(strerror(errno)));
         }
     }
-
-    catch (std::runtime_error &ex)
-    {
+    catch (std::runtime_error &ex) {
         _logger->error("Failed to process connection on descriptor {}: {}", client_socket, ex.what());
     }
     close(client_socket);
 
     std::unique_lock<std::mutex> lock(_mut); //changing _workers_sockets
     std::vector<int>::iterator position = std::find(_workers_sockets.begin(), _workers_sockets.end(), client_socket);
-    if (position != _workers_sockets.end()) // == myVector.end() means the element was not found
-    {
+    if (position != _workers_sockets.end()) {
         _workers_sockets.erase(position);
+    }
+    if(_workers_sockets.empty()) {
+        _workers_end.notify_all();
     }
 }
 
