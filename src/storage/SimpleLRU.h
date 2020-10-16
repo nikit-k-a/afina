@@ -15,8 +15,7 @@ namespace Backend {
  * # Map based implementation
  * That is NOT thread safe implementaiton!!
  */
-class SimpleLRU : public Afina::Storage
-{
+class SimpleLRU : public Afina::Storage {
 public:
     SimpleLRU(size_t max_size = 1024):
         _max_size(max_size),
@@ -25,15 +24,10 @@ public:
         _lru_tail(nullptr)
         {}
 
-    ~SimpleLRU()
-    {
-
+    ~SimpleLRU() {
         _lru_index.clear();
-        if(_lru_tail != nullptr)
-        {
-            printf("\n\n\nDestructor\n\n\n");
-            while(_lru_tail->prev != nullptr)
-            {
+        if(_lru_tail != nullptr) {
+            while(_lru_tail->prev != nullptr) {
                 _lru_tail = _lru_tail->prev;
                 _lru_tail -> next.reset();
             }
@@ -59,9 +53,15 @@ public:
     bool Get(const std::string &key, std::string &value) override;
 
 private:
+    struct lru_node;
+    //typedef to pass iterator to a function
+    typedef std::map<std::reference_wrapper<const std::string>, std::reference_wrapper<lru_node>, std::less<std::string>> Map_t;
+    void _delete_head();
+    void _insert_tail(const std::string &key, const std::string &value);
+
+private:
     // LRU cache node
-    using lru_node = struct lru_node
-    {
+    using lru_node = struct lru_node {
         lru_node(const std::string &key, const std::string &value):
             key(key),
             value(value),
@@ -92,12 +92,7 @@ private:
     lru_node* _lru_tail;
 
     // Index of nodes from list above, allows fast random access to elements by lru_node#key
-    //typedef to pass iterator to a function
-    typedef std::map<std::reference_wrapper<const std::string>, std::reference_wrapper<lru_node>, std::less<std::string>> Map_t;
     Map_t _lru_index;
-
-    void _put(const std::string &key, const std::string &value, const Map_t::const_iterator &it);
-    void _delete(const std::string &key, const Map_t::const_iterator &it);
 };
 
 } // namespace Backend
