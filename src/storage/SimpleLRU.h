@@ -54,8 +54,6 @@ public:
 
 private:
     struct lru_node;
-    //typedef to pass iterator to a function
-    typedef std::map<std::reference_wrapper<const std::string>, std::reference_wrapper<lru_node>, std::less<std::string>> Map_t;
     void _delete_head();
     void _insert_tail(const std::string &key, const std::string &value);
 
@@ -88,11 +86,10 @@ private:
     // List owns all nodes
     std::unique_ptr<lru_node> _lru_head;
 
-    //good not to go through list to reach tail
     lru_node* _lru_tail;
 
     // Index of nodes from list above, allows fast random access to elements by lru_node#key
-    Map_t _lru_index;
+    std::map<std::reference_wrapper<const std::string>, std::reference_wrapper<lru_node>, std::less<std::string>> _lru_index;
 };
 
 } // namespace Backend
