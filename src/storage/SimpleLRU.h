@@ -54,8 +54,9 @@ public:
 
 private:
     struct lru_node;
-    void _delete_head();
-    void _insert_tail(const std::string &key, const std::string &value);
+    void _Free_space(std::size_t delta);
+    bool _Insert_tail(const std::string &key, const std::string &value);
+    void _Move_to_tail(SimpleLRU::lru_node *node);
 
 private:
     // LRU cache node
