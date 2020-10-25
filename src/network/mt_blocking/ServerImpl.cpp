@@ -93,15 +93,15 @@ void ServerImpl::Stop() {
 
 // See Server.h
 void ServerImpl::Join() {
-    {
-        std::unique_lock<std::mutex> lock(_mut);
-        while(!_workers_sockets.empty()) {
-            _workers_end.wait(lock);
-        }
-    }
     assert(_thread.joinable());
     _thread.join();
     close(_server_socket);
+
+    //no new connections possible, waiting for workers
+    std::unique_lock<std::mutex> lock(_mut);
+    while(!_workers_sockets.empty()) {
+        _workers_end.wait(lock);
+    }
 }
 
 // See Server.h
