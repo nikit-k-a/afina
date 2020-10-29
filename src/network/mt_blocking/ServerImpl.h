@@ -4,6 +4,11 @@
 #include <atomic>
 #include <thread>
 
+#include <mutex>
+#include <condition_variable>
+
+#include <vector>
+
 #include <afina/network/Server.h>
 
 namespace spdlog {
@@ -40,8 +45,9 @@ protected:
 
 private:
     // Logger instance
-    std::shared_ptr<spdlog::logger> _logger;
+    void client_handler(int client_socket);
 
+    std::shared_ptr<spdlog::logger> _logger;
     // Atomic flag to notify threads when it is time to stop. Note that
     // flag must be atomic in order to safely publisj changes cross thread
     // bounds
@@ -52,6 +58,14 @@ private:
 
     // Thread to run network on
     std::thread _thread;
+
+    //max_workers num
+    size_t _max_workers;
+
+    std::vector <int> _workers_sockets;
+    std::mutex _mut;
+
+    std::condition_variable _workers_end;
 };
 
 } // namespace MTblocking
