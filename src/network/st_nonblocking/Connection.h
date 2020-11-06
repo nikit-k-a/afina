@@ -20,11 +20,14 @@ namespace STnonblock {
 class Connection {
 public:
     Connection(int s, std::shared_ptr<spdlog::logger> &pl, std::shared_ptr<Afina::Storage> &ps) :
-        _socket(s), _logger(pl), _storage(ps) {
-        _isAlive = true;
-        _read_all = false;
-        _arg_remains = 0;
-        _head_offset = 0;
+        _socket(s),
+        _logger(pl),
+        _storage(ps),
+        _isAlive(true),
+        _read_all(false),
+        _arg_remains(0),
+        _head_offset(0),
+        _buf_offset(0) {
         std::memset(&_event, 0, sizeof(struct epoll_event));
         _event.data.ptr = this;
     }
@@ -56,6 +59,7 @@ private:
     char _client_buf [4096];
     std::size_t _arg_remains;
     std::size_t _head_offset;
+    std::size_t _buf_offset;
     std::string _argument_for_command;
     std::vector<std::string> _result_queue;
 };
