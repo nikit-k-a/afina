@@ -87,6 +87,12 @@ protected:
 
     static void null_unblocker(Engine &) {}
 
+private:
+    void set_after(context &ctx) {
+        char addr;
+        ctx.Low = &addr;
+    }
+
 public:
     Engine(unblocker_func unblocker = null_unblocker)
         : StackBottom(0), cur_routine(nullptr), alive(nullptr), _unblocker(unblocker) {}
@@ -152,7 +158,7 @@ public:
             // Here: correct finish of the coroutine section
             yield();
         } else if (pc != nullptr) {
-            Store(*idle_ctx);
+            // Store(*idle_ctx);//Filipp deleted this
             sched(pc);
         }
 
@@ -166,6 +172,11 @@ public:
      * errors function returns -1
      */
     template <typename... Ta> void *run(void (*func)(Ta...), Ta &&... args) {
+            char addr;
+            run_impl(&addr, func, std::forward<Ta>(args)...);
+        }
+
+    template <typename... Ta> void *run_impl(char* address, void (*func)(Ta...), Ta &&... args) {
         if (this->StackBottom == 0) {
             // Engine wasn't initialized yet
             return nullptr;
@@ -173,7 +184,7 @@ public:
 
         // New coroutine context that carries around all information enough to call function
         context *pc = new context();
-
+        pc->Hight = address;
         // Store current state right here, i.e just before enter new coroutine, later, once it gets scheduled
         // execution starts here. Note that we have to acquire stack of the current function call to ensure
         // that function parameters will be passed along
@@ -196,10 +207,12 @@ public:
                 pc->next->prev = pc->prev;
             }
 
+
+////Filipp deleted this/////////
             if (alive == cur_routine) {
                 alive = alive->next;
             }
-
+//////////////
             // current coroutine finished, and the pointer is not relevant now
             cur_routine = nullptr;
             pc->prev = pc->next = nullptr;
@@ -216,6 +229,9 @@ public:
         // it is neccessary to save arguments, pointer to body function, pointer to context, e.t.c - i.e
         // save stack.
         Store(*pc);
+        char addr;
+        // pc->Low = &addr;
+
 
         // Add routine as alive double-linked list
         pc->next = alive;
