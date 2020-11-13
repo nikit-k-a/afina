@@ -87,12 +87,6 @@ protected:
 
     static void null_unblocker(Engine &) {}
 
-private:
-    void set_after(context &ctx) {
-        char addr;
-        ctx.Low = &addr;
-    }
-
 public:
     Engine(unblocker_func unblocker = null_unblocker)
         : StackBottom(0), cur_routine(nullptr), alive(nullptr), _unblocker(unblocker) {}
@@ -150,6 +144,10 @@ public:
         void *pc = run(main, std::forward<Ta>(args)...);
 
         idle_ctx = new context();
+
+        cur_routine = idle_ctx;
+        idle_ctx->Hight = StackBottom;
+
         if (setjmp(idle_ctx->Environment) > 0) {
             if (alive == nullptr) {
                 _unblocker(*this);
@@ -158,12 +156,15 @@ public:
             // Here: correct finish of the coroutine section
             yield();
         } else if (pc != nullptr) {
-            // Store(*idle_ctx);//Filipp deleted this
+            Store(*idle_ctx);//Filipp deleted this
             sched(pc);
         }
 
         // Shutdown runtime
         delete idle_ctx;
+
+        cur_routine = nullptr;
+
         this->StackBottom = 0;
     }
 
@@ -173,7 +174,7 @@ public:
      */
     template <typename... Ta> void *run(void (*func)(Ta...), Ta &&... args) {
             char addr;
-            run_impl(&addr, func, std::forward<Ta>(args)...);
+            return run_impl(&addr, func, std::forward<Ta>(args)...);
         }
 
     template <typename... Ta> void *run_impl(char* address, void (*func)(Ta...), Ta &&... args) {
@@ -229,9 +230,6 @@ public:
         // it is neccessary to save arguments, pointer to body function, pointer to context, e.t.c - i.e
         // save stack.
         Store(*pc);
-        char addr;
-        // pc->Low = &addr;
-
 
         // Add routine as alive double-linked list
         pc->next = alive;

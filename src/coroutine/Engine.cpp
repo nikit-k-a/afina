@@ -10,7 +10,8 @@ namespace Afina {
 namespace Coroutine {
 
 void Engine::Store(context &ctx) {
-    set_after(ctx); // higher on stack
+    char addr = 0;
+    ctx.Low = &addr; // higher on stack
 
     assert (ctx.Hight - ctx.Low >= 0);
     printf ("\n\nLow = %p\n\n", ctx.Low);
@@ -33,11 +34,13 @@ void Engine::Store(context &ctx) {
 
 void Engine::Restore(context &ctx) {
     char cur_addr;
-    while(&cur_addr < ctx.Hight) {
+    // printf("restore addr = %p\n", &cur_addr);
+    // printf ("Low = %p\n", ctx.Low);
+    while(&cur_addr > ctx.Low) {
         Restore(ctx);
     }
 
-    assert(&cur_addr > ctx.Low);
+    assert(&cur_addr < ctx.Hight);
 
     printf("Restore_before memcpy\n");
     std::size_t memory_restore = ctx.Hight - ctx.Low;
@@ -48,8 +51,33 @@ void Engine::Restore(context &ctx) {
     cur_routine = &ctx;
 
     longjmp(ctx.Environment, 1);
-
 }
+
+/*
+void Engine::yield() {
+    if (alive == nullptr) {
+        return;
+    }
+    if (alive == cur_routine && alive->next != nullptr) {
+        sched(alive->next);
+    }
+    sched(alive);
+}
+
+void Engine::sched(void *routine_) {
+    context &ctx = *(static_cast<context *>(routine_));
+    if(cur_routine == nullptr){
+        return;
+    }
+    if (cur_routine != idle_ctx) { // Function was called from scheduller
+        if (setjmp(cur_routine->Environment) > 0) {
+            return;
+        } // corutine continue
+        Store(*cur_routine);       // Because storing of idle_ctx presented in start function
+    }
+
+    Restore(ctx);
+}*/
 
 void Engine::yield() {
     sched(nullptr);
@@ -57,13 +85,37 @@ void Engine::yield() {
 
 void Engine::sched(void *routine_) {
 
-    //TODO: nullptr
-    if (setjmp(cur_routine->Environment) > 0) {
+    printf("sched enter\n");
+    auto routine = (context*)routine_;
+
+    if(alive == nullptr || routine_ == cur_routine) {
+        printf("If 1\n");
         return;
     }
-    Store(*cur_routine);
 
-    Restore(*(context*)routine_);
+
+    if (routine == nullptr){
+        if (alive == cur_routine && alive->next != nullptr) {
+            printf("If 2\n");
+            routine_ = alive->next;
+        }
+        routine = alive;
+        printf("sched routine reset\n");
+    }
+    printf("sched before setjmp\n");
+    //TODO: nullptr
+    if(cur_routine != idle_ctx) {
+        printf("If 4\n");
+        if (setjmp(cur_routine->Environment) > 0) {
+            printf("in setjmp\n");
+            return;
+        }
+        printf("sched before store\n");
+        Store(*cur_routine);
+    }
+
+    printf("sched before restore\n");
+    Restore(*routine);
 }
 
 } // namespace Coroutine
