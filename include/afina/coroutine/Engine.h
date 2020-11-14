@@ -87,9 +87,13 @@ protected:
 
     static void null_unblocker(Engine &) {}
 
+private:
+    void remove_head(context*& head, context*& elmt);
+    void add_head(context*& head, context*& new_head);
+
 public:
     Engine(unblocker_func unblocker = null_unblocker)
-        : StackBottom(0), cur_routine(nullptr), alive(nullptr), _unblocker(unblocker) {}
+        : StackBottom(0), cur_routine(nullptr), alive(nullptr), blocked(nullptr), _unblocker(unblocker) {}
     Engine(Engine &&) = delete;
     Engine(const Engine &) = delete;
 
@@ -146,7 +150,10 @@ public:
         idle_ctx = new context();
 
         cur_routine = idle_ctx;
+        //because store later and Low set in Store
         idle_ctx->Hight = StackBottom;
+        idle_ctx->Low = StackBottom;
+
 
         if (setjmp(idle_ctx->Environment) > 0) {
             if (alive == nullptr) {
@@ -156,7 +163,13 @@ public:
             // Here: correct finish of the coroutine section
             yield();
         } else if (pc != nullptr) {
-            Store(*idle_ctx);//Filipp deleted this
+            /* can't delete Store(idle),
+             * we need restore idle
+             * after pc longjump
+             * but additional if to sched
+             * is required
+            */
+            Store(*idle_ctx);
             sched(pc);
         }
 
@@ -208,12 +221,11 @@ public:
                 pc->next->prev = pc->prev;
             }
 
-
-////Filipp deleted this/////////
             if (alive == cur_routine) {
                 alive = alive->next;
+                //need in case of idle
             }
-//////////////
+
             // current coroutine finished, and the pointer is not relevant now
             cur_routine = nullptr;
             pc->prev = pc->next = nullptr;
