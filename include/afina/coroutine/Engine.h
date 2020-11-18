@@ -39,6 +39,9 @@ private:
         // Saved coroutine context (registers)
         jmp_buf Environment;
 
+        //true if coroutine is blocked
+        bool is_blocked = false;
+
         // To include routine in the different lists, such as "alive", "blocked", e.t.c
         struct context *prev = nullptr;
         struct context *next = nullptr;
@@ -88,8 +91,8 @@ protected:
     static void null_unblocker(Engine &) {}
 
 private:
-    void remove_head(context*& head, context*& elmt);
-    void add_head(context*& head, context*& new_head);
+    void remove_from_lst(context*& head, context*& elmt);
+    void add_head_lst(context*& head, context*& new_head);
 
 public:
     Engine(unblocker_func unblocker = null_unblocker)
@@ -163,13 +166,7 @@ public:
             // Here: correct finish of the coroutine section
             yield();
         } else if (pc != nullptr) {
-            /* can't delete Store(idle),
-             * we need restore idle
-             * after pc longjump
-             * but additional if to sched
-             * is required
-            */
-            Store(*idle_ctx);
+            // Store(*idle_ctx);
             sched(pc);
         }
 

@@ -13,19 +13,16 @@ void Engine::Store(context &ctx) {
     char addr = 0;
     if(&ctx != idle_ctx){
         ctx.Low = &addr; // higher on stack
-    }
+        assert (ctx.Hight - ctx.Low >= 0);
 
-    assert (ctx.Hight - ctx.Low >= 0);
+        std::size_t memory_need = ctx.Hight - ctx.Low;
 
-    std::size_t memory_need = ctx.Hight - ctx.Low;
+        if(std::get<1>(ctx.Stack) < memory_need || std::get<1>(ctx.Stack) > 2*memory_need) {
+            delete [] std::get<0>(ctx.Stack);
+            std::get<1>(ctx.Stack) = memory_need;
+            std::get<0>(ctx.Stack) = new char[memory_need];
+        }
 
-    if(std::get<1>(ctx.Stack) < memory_need || std::get<1>(ctx.Stack) > 2*memory_need) {
-        delete [] std::get<0>(ctx.Stack);
-        std::get<1>(ctx.Stack) = memory_need;
-        std::get<0>(ctx.Stack) = new char[memory_need];
-    }
-
-    if(&ctx != idle_ctx) {
         memcpy(std::get<0>(ctx.Stack), ctx.Low, memory_need);
     }
 }
@@ -57,14 +54,17 @@ void Engine::sched(void *routine_) {
 
     //nothing to do cases
     if(   alive == nullptr
-       || routine_ == cur_routine
-       || ( routine_ == blocked
-           && routine_ != nullptr )) {
+       || routine == cur_routine) {
         return;
     }
 
+    if(routine != nullptr) {
+        if(routine->is_blocked) {
+            return;
+        }
+    }
     //yield case
-    if (routine == nullptr){
+    if (routine == nullptr) {
         //assign next or alive to routine
         if (alive == cur_routine && alive->next != nullptr) {
             routine_ = alive->next;
@@ -85,7 +85,7 @@ void Engine::sched(void *routine_) {
     Restore(*routine);
 }
 
-void Engine::remove_head(context*& head, context*& elmt) {
+void Engine::remove_from_lst(context*& head, context*& elmt) {
     //removing coroutine from list
     if(head == elmt) {
         head = head->next;
@@ -98,7 +98,7 @@ void Engine::remove_head(context*& head, context*& elmt) {
     }
 }
 
-void Engine::add_head(context*& head, context*& new_head) {
+void Engine::add_head_lst(context*& head, context*& new_head) {
     if(head == nullptr) {
         head = new_head;
         head->prev = nullptr;
@@ -121,13 +121,18 @@ void Engine::block(void *coro){
     if (coro == nullptr){
         blocking = cur_routine;
     }
-    //removing from alive list
-    remove_head(alive, blocking);
-    //adding to block list head
-    add_head(blocked, blocking);
 
-    if(blocking == cur_routine) {
-        yield();
+    if(blocking->is_blocked == false) {
+        blocking->is_blocked = true;
+        //removing from alive list
+        remove_from_lst(alive, blocking);
+        //adding to block list head
+        add_head_lst(blocked, blocking);
+
+        if(blocking == cur_routine) {
+            // yield();
+            Restore(*idle_ctx);
+        }
     }
 }
 
@@ -136,8 +141,13 @@ void Engine::unblock(void* coro){
     if (unblocking == nullptr){
         return;
     }
-    remove_head(blocked, unblocking);
-    add_head(alive, unblocking);
+
+    if(unblocking->is_blocked == true){
+        unblocking->is_blocked = false;
+
+        remove_from_lst(blocked, unblocking);
+        add_head_lst(alive, unblocking);
+    }
 }
 
 } // namespace Coroutine
