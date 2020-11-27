@@ -11,20 +11,21 @@ namespace Coroutine {
 
 void Engine::Store(context &ctx) {
     char addr = 0;
-    if(&ctx != idle_ctx){
-        ctx.Low = &addr; // higher on stack
-        assert (ctx.Hight - ctx.Low >= 0);
-
-        std::size_t memory_need = ctx.Hight - ctx.Low;
-
-        if(std::get<1>(ctx.Stack) < memory_need || std::get<1>(ctx.Stack) > 2*memory_need) {
-            delete [] std::get<0>(ctx.Stack);
-            std::get<1>(ctx.Stack) = memory_need;
-            std::get<0>(ctx.Stack) = new char[memory_need];
-        }
-
-        memcpy(std::get<0>(ctx.Stack), ctx.Low, memory_need);
+    if(&ctx == idle_ctx){
+        return;
     }
+    ctx.Low = &addr; // higher on stack
+    assert (ctx.Hight > ctx.Low);
+
+    std::size_t memory_need = ctx.Hight - ctx.Low;
+
+    if(std::get<1>(ctx.Stack) < memory_need || std::get<1>(ctx.Stack) > 2*memory_need) {
+        delete [] std::get<0>(ctx.Stack);
+        std::get<1>(ctx.Stack) = memory_need;
+        std::get<0>(ctx.Stack) = new char[memory_need];
+    }
+
+    memcpy(std::get<0>(ctx.Stack), ctx.Low, memory_need);
 }
 
 void Engine::Restore(context &ctx) {
@@ -52,18 +53,10 @@ void Engine::yield() {
 void Engine::sched(void *routine_) {
     auto routine = (context*)routine_;
 
-    //nothing to do cases
-    if(   alive == nullptr
-       || routine == cur_routine) {
+    if(alive == nullptr) {
         return;
     }
 
-    if(routine != nullptr) {
-        if(routine->is_blocked) {
-            return;
-        }
-    }
-    //yield case
     if (routine == nullptr) {
         //assign next or alive to routine
         if (alive == cur_routine && alive->next != nullptr) {
@@ -73,6 +66,17 @@ void Engine::sched(void *routine_) {
         //routine is now alive
         routine = alive;
     }
+    //nothing to do cases
+    if(routine == cur_routine) {
+        return;
+    }
+
+    if(routine != nullptr) {
+        if(routine->is_blocked) {
+            return;
+        }
+    }
+    //yield case
 
     if(cur_routine != idle_ctx) {
         if (setjmp(cur_routine->Environment) > 0) {
@@ -98,7 +102,7 @@ void Engine::remove_from_lst(context*& head, context*& elmt) {
     }
 }
 
-void Engine::add_head_lst(context*& head, context*& new_head) {
+void Engine::add_to_lst(context*& head, context*& new_head) {
     if(head == nullptr) {
         head = new_head;
         head->prev = nullptr;
@@ -127,7 +131,7 @@ void Engine::block(void *coro){
         //removing from alive list
         remove_from_lst(alive, blocking);
         //adding to block list head
-        add_head_lst(blocked, blocking);
+        add_to_lst(blocked, blocking);
 
         if(blocking == cur_routine) {
             // yield();
@@ -146,7 +150,7 @@ void Engine::unblock(void* coro){
         unblocking->is_blocked = false;
 
         remove_from_lst(blocked, unblocking);
-        add_head_lst(alive, unblocking);
+        add_to_lst(alive, unblocking);
     }
 }
 

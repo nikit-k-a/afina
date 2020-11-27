@@ -92,7 +92,7 @@ protected:
 
 private:
     void remove_from_lst(context*& head, context*& elmt);
-    void add_head_lst(context*& head, context*& new_head);
+    void add_to_lst(context*& head, context*& new_head);
 
 public:
     Engine(unblocker_func unblocker = null_unblocker)
