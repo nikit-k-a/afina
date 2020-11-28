@@ -141,6 +141,7 @@ void ServerImpl::OnRun() {
     }
 
     struct epoll_event event;
+    //exclusive + level_triggered = no thunder herd
     event.events = EPOLLIN | EPOLLEXCLUSIVE;
     event.data.fd = _server_socket;
     if (epoll_ctl(acceptor_epoll, EPOLL_CTL_ADD, _server_socket, &event)) {
@@ -193,7 +194,7 @@ void ServerImpl::OnRun() {
                 }
 
                 // Register the new FD to be monitored by epoll.
-                Connection *pc = new Connection(infd);
+                Connection *pc = new Connection(infd, _logger, pStorage);
                 if (pc == nullptr) {
                     throw std::runtime_error("Failed to allocate connection");
                 }
